@@ -1,4 +1,4 @@
-# ecommerce-SQL-project-Web-Traffic-Analysis-Part-1
+# Ecommerce-SQL-project-Web-Traffic-Analysis-Part-1
 Introduction
 In this SQL project, I took on the role of an eCommerce Database Analyst for Toy Factory, an online retailer that had just launched its first product. Alongside the CEO, Marketing Manager, and Website Manager of this startup team, I acted as an analyst to help steer business decisions by analyzing marketing channels, measuring website performance, and exploring the product portfolio.
 
