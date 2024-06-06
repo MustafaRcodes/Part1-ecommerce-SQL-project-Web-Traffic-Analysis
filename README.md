@@ -26,6 +26,6 @@ UTM Campaigns: Include nonbrand and brand. The nonbrand group targets product ca
 UTM Contents: Include g_ad_1, g_ad_2, b_ad_1, and b_ad_2, often used to store the name of a specific ad unit being run.
 Project Background
 
-The Situation: Toy Factory has been live for approximately 8 months, and the CEO is preparing to present company performance metrics to the board next week. As the analyst, I am tasked with preparing the relevant metrics to showcase the company's promising growth.
+The Situation: The CEO is preparing to present company performance metrics to the board next week. As the analyst, I am tasked with preparing the relevant metrics to showcase the company's promising growth.
 
 The Objective: Use SQL to extract and analyze website traffic and performance data from the Toy Factory database, quantify the company’s growth, and effectively communicate the story of how we have achieved that growth.
