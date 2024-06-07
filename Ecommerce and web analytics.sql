@@ -292,4 +292,97 @@ GROUP BY
   -- next step is analyze landing page performance, for the homepage specificaly
   -- think about whether or not the homepage is the best initial experience for all customers.
   
--- LANDING PAGE PERFORMANCE & TESTING
+-- LANDING PAGE PERFORMANCE & A/B TESTING
+-- BUSINESS CONTEXT: we would like to see landing page performance for a certain time period
+-- Step 1: find the first website_pageview_id for relevant sessions
+-- Step 2: identify the landing page of each session
+-- Step 3: counting pageviews for each session, to identify "bounces" 
+-- Step 4: summarizing total sessions and  bounced sessions, by landing page
+
+-- Finding the minimum website pageviews id associated with each session we care about.
+SELECT
+   website_pageviews.website_session_id,
+   MIN(website_pageviews.website_pageview_id) AS min_pageviews_id
+FROM website_pageviews
+    INNER JOIN website_sessions
+      ON website_sessions.website_session_id = website_pageviews.website_session_id
+      AND website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01'
+GROUP BY 
+     website_pageviews.website_session_id;
+     
+-- Same query as above, this time we are storing the dataset as a temporary table 
+
+CREATE TEMPORARY TABLE first_pageviews_demo 
+SELECT
+   website_pageviews.website_session_id,
+   MIN(website_pageviews.website_pageview_id) AS min_pageviews_id
+FROM website_pageviews
+    INNER JOIN website_sessions
+      ON website_sessions.website_session_id = website_pageviews.website_session_id
+      AND website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01'
+GROUP BY 
+     website_pageviews.website_session_id;
+     
+SELECT* FROM first_pageviews_demo;
+
+-- next,we'll bring in the landing page to each session
+
+CREATE TEMPORARY TABLE session_w_landing_page_demo
+SELECT
+	-- first_pageviews_demo.min_pageviews_id,
+    first_pageviews_demo.website_session_id,
+    website_pageviews.pageview_url AS landing_page
+FROM first_pageviews_demo
+    LEFT JOIN website_pageviews
+      ON website_pageviews.website_pageview_id = first_pageviews_demo.min_pageviews_id;
+
+SELECT * FROM session_w_landing_page_demo;
+      
+-- Next we make a table to include a count pf pageview per session
+-- Then we will limit to bounced sessions and create a temporary table 
+
+CREATE TEMPORARY TABLE bounced_sessions_only
+SELECT 
+    session_w_landing_page_demo.website_session_id,
+    session_w_landing_page_demo.landing_page,
+    COUNT(website_pageviews.website_pageview_id) AS count_of_pages_viewed
+FROM 
+    session_w_landing_page_demo
+LEFT JOIN website_pageviews
+    ON website_pageviews.website_session_id = session_w_landing_page_demo.website_session_id
+GROUP BY 
+    session_w_landing_page_demo.website_session_id,
+    session_w_landing_page_demo.landing_page
+HAVING 
+    COUNT(website_pageviews.website_pageview_id) = 1;
+    
+SELECT * FROM first_pageviews_demo;
+SELECT * FROM session_w_landing_page_demo;
+SELECT * FROM bounced_sessions_only;
+
+SELECT 
+    session_w_landing_page_demo.landing_page,
+    session_w_landing_page_demo.website_session_id,
+    bounced_sessions_only.website_session_id AS bounced_website_session_id
+FROM session_w_landing_page_demo
+	LEFT JOIN bounced_sessions_only
+    ON session_w_landing_page_demo.website_session_id = bounced_sessions_only.website_session_id
+ORDER BY 
+    session_w_landing_page_demo.website_session_id;
+    
+-- Final output 
+  -- we will use the same query we previously ran, and run a count of records,
+  -- we will group by landing page, and then we will add a bounce rate column
+  
+  SELECT 
+    session_w_landing_page_demo.landing_page,
+    COUNT(session_w_landing_page_demo.website_session_id) AS sessions,
+    COUNT(bounced_sessions_only.website_session_id) AS bounced_website_session_id,
+    COUNT(bounced_sessions_only.website_session_id)/COUNT(session_w_landing_page_demo.website_session_id) AS bounce_rate
+FROM session_w_landing_page_demo
+	LEFT JOIN bounced_sessions_only
+    ON session_w_landing_page_demo.website_session_id = bounced_sessions_only.website_session_id
+GROUP BY 
+	session_w_landing_page_demo.landing_page
+ORDER BY 
+    session_w_landing_page_demo.landing_page;
