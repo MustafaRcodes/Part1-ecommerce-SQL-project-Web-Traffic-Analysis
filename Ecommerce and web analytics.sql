@@ -446,3 +446,12 @@ SELECT
  FROM sessions_w_home_landing_page
    LEFT JOIN bounced_sessions
     ON sessions_w_home_landing_page.website_session_id = bounced_sessions.website_session_id;
+    
+    -- ANALYSING LANDING PAGE TEST
+   -- Step 1: Find out when the new page/lander launched
+   -- Step 2: Finding the first website_pageview_id for relevant sessions
+   -- Step 3: Indentifying the landing page of each session
+   -- Step 4: Counting pageviews for each session, to identify "bounces"
+   -- Step 5: Summarizing total sessions and bounced sessions, by landing page
+   
+   
