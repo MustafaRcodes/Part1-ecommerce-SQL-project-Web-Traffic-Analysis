@@ -525,4 +525,15 @@ FROM nonbrand_test_sessions_w_landing_page
     ON nonbrand_test_sessions_w_landing_page.website_session_id = nonbrand_test_bounced_sessions.website_session_id
 GROUP BY 
    nonbrand_test_sessions_w_landing_page.landing_page;
-     
+
+
+SELECT 
+  nonbrand_test_sessions_w_landing_page.landing_page,
+  COUNT(DISTINCT nonbrand_test_sessions_w_landing_page.website_session_id) AS sessions,
+  COUNT(DISTINCT nonbrand_test_bounced_sessions.website_session_id) AS bounced_sessions,
+  COUNT(DISTINCT nonbrand_test_bounced_sessions.website_session_id)/COUNT(DISTINCT nonbrand_test_sessions_w_landing_page.website_session_id) AS bounced_rate
+FROM nonbrand_test_sessions_w_landing_page
+  LEFT JOIN nonbrand_test_bounced_sessions
+    ON nonbrand_test_sessions_w_landing_page.website_session_id = nonbrand_test_bounced_sessions.website_session_id
+GROUP BY 
+   nonbrand_test_sessions_w_landing_page.landing_page;
