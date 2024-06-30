@@ -537,3 +537,183 @@ FROM nonbrand_test_sessions_w_landing_page
     ON nonbrand_test_sessions_w_landing_page.website_session_id = nonbrand_test_bounced_sessions.website_session_id
 GROUP BY 
    nonbrand_test_sessions_w_landing_page.landing_page;
+   
+-- insights - the custom lander has a lower bounce rate which is great
+
+-- LANDING PAGE TREND ANALYSIS
+-- Step 1: finding the first website_pageview_id for relevant sessions
+-- Step 2: indentifying the landing page of each session 
+-- Step 3: counting pageviews for each session to identify "bounces"
+-- Step 4: summarizing by week (bounce rate, sessions to each lander)
+
+CREATE TEMPORARY TABLE sessions_w_min_pv_id_and_view_count
+SELECT 
+    website_sessions.website_session_id,
+    MIN(website_pageviews.website_pageview_id) AS first_pageview_id,
+    COUNT(website_pageviews.website_pageview_id) AS count_pageviews
+FROM website_sessions
+     LEFT JOIN website_pageviews
+       ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.created_at > '2012-06-01' -- asked by management 
+     AND website_sessions.created_at < '2012-08-31' 
+     AND website_sessions.utm_source = 'gsearch'
+     AND website_sessions.utm_campaign = 'nonbrand'
+GROUP BY 
+     website_sessions.website_session_id;
+
+CREATE TEMPORARY TABLE sessions_w_counts_lander_and_created_at     
+SELECT 
+    sessions_w_min_pv_id_and_view_count.website_session_id,
+	sessions_w_min_pv_id_and_view_count.first_pageview_id,
+    sessions_w_min_pv_id_and_view_count.count_pageviews,
+    website_pageviews.pageview_url AS landing_page,
+    website_pageviews.created_at AS session_created_at
+FROM sessions_w_min_pv_id_and_view_count
+    LEFT JOIN website_pageviews
+      ON sessions_w_min_pv_id_and_view_count.first_pageview_id = website_pageviews.website_pageview_id;
+      
+SELECT 
+    -- YEARWEEK(session_created_at) AS year_week,
+    MIN(DATE(session_created_at)) AS week_start_date,
+    -- COUNT(DISTINCT website_session_id) AS total_sessions,
+    -- COUNT(DISTINCT CASE WHEN count_pageviews = 1 THEN website_session_id ELSE NULL END) AS bounced_sessions,
+    COUNT(DISTINCT CASE WHEN count_pageviews = 1 THEN website_session_id ELSE NULL END)*1.0/COUNT(DISTINCT website_session_id) AS bounce_rate,
+    COUNT(DISTINCT CASE WHEN landing_page = '/home' THEN website_session_id ELSE NULL END) AS home_sessions,
+    COUNT(DISTINCT CASE WHEN landing_page = '/lander-1' THEN website_session_id ELSE NULL END) AS lander_sessions
+FROM 
+	sessions_w_counts_lander_and_created_at 
+GROUP BY 
+    YEARWEEK(session_created_at);
+    
+ -- Looks like both pages were getting traffic for a while, and then we fully switche over to the custom lander as intended.
+ -- And it looks like out overall bounce rate has come down over time
+ 
+ 
+ -- ANALYZING & TESTING CONVERSION FUNNELS
+-- CONVERSION FUNNEL ANALYSIS IS ABOUT UNDERSTANDING AND OPTIMIZING EACH STEP OF USER'S EXPERIENCE ON 
+-- THEIR JOURNEY TOWARDS PURCHASING PRODUCT.
+-- FROM HOME PAFE TO PRODUCT PAGE TO ADD TO CART TO SALE- CHECKING PAGE FROM CUSTOMER LAND ON AND WHAT PERCENTAGE 
+-- OF CUSTOMER MOVE TO THE SECOND PAGE AND THEN WAHT PERCENTAGE GO TO ADD TO CART AND WHAT PERCETAGE WILL COMPLETE PURCAHSE 
+-- WILL CHECK HOW MANY CUSTOMER WILL MOVE ON TO THE NEXT STEP.
+
+-- COMMON USE CASES:
+-- IDENTIFYING THE MOST COMMON PATHS CUSTOMERS TAKE BEFORE PURCHASING PRODUCT 
+-- IDENTIFYING HOW MANY USERS CONTINUE ON TO EACH NEXT STEP IN CONVERSION FLOW, AND HOW MANY USERS 
+-- ABANDON AT EACH STEP.
+-- OPTIMIZING CRITICAL PAIN POINT WHERE USERS ARE ABANDONING, SO THAT CAN CONVERT MORE USERS AND SELL MORE PRODUCT.
+
+-- USING SUBQUERY
+
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   website_pageviews.created_at AS pageview_created_at,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS products_page,
+   CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01' 
+    AND website_pageviews.pageview_url IN ('/lander-2','/products','/the-original-mr-fuzzy','/cart')
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at;
+
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   website_pageviews.created_at AS pageview_created_at,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS products_page
+   -- CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   -- CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01' 
+    AND website_pageviews.pageview_url IN ('/lander-2','/products','/the-original-mr-fuzzy','/cart')
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at;
+    
+    
+-- Next we will put the previous query inside a subquery ( similar to temporary table)
+-- We will group by website_session_id, and take the MAX() of each of the flags
+-- This MAX() become a made_it flag for that session, to show the session made it there.
+
+SELECT 
+website_session_id,
+MAX(product_page) AS product_made_it,
+MAX(mrfuzzy_page) AS mrfuzzy_made_it,
+MAX(cart_page) AS cart_made_it
+FROM (
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS product_page,
+   CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01' 
+    AND website_pageviews.pageview_url IN ('/lander-2','/products','/the-original-mr-fuzzy','/cart')
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at
+) AS pageview_level
+
+GROUP BY 
+    website_session_id;
+    
+    
+-- Another way of getting same result like above we got with subquery
+    SELECT
+   website_sessions.website_session_id,
+   -- website_pageviews.pageview_url,
+   -- website_pageviews.created_at AS pageview_created_at,
+  MAX(CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END) AS products_page,
+  MAX(CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END) AS mrfuzzy_page,
+  MAX(CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END) AS cart_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01' 
+    AND website_pageviews.pageview_url IN ('/lander-2','/products','/the-original-mr-fuzzy','/cart')
+GROUP BY
+   website_sessions.website_session_id
+   -- website_pageviews.pageview_url,
+   -- website_pageviews.created_at
+ORDER BY 
+    website_sessions.website_session_id;
+    -- website_pageviews.created_at
+    
+SELECT 
+    COUNT(website_session_id) AS sessions,
+    SUM(product_made_it) / COUNT(website_session_id) AS lander_clickthrough_rate,
+    SUM(mrfuzzy_made_it) / SUM(product_made_it) AS product_clickthrough_rate,
+    SUM(cart_made_it) / SUM(mrfuzzy_made_it) AS mr_fuzzy_clickthrough_rate
+FROM (
+    SELECT
+        website_session_id,
+        MAX(product_page) AS product_made_it,
+        MAX(mrfuzzy_page) AS mrfuzzy_made_it,
+        MAX(cart_page) AS cart_made_it
+    FROM (
+        SELECT
+            website_sessions.website_session_id,
+            CASE WHEN website_pageviews.pageview_url = '/products' THEN 1 ELSE 0 END AS product_page,
+            CASE WHEN website_pageviews.pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+            CASE WHEN website_pageviews.pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page
+        FROM website_sessions
+        LEFT JOIN website_pageviews
+            ON website_sessions.website_session_id = website_pageviews.website_session_id
+        WHERE website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01'
+            AND website_pageviews.pageview_url IN ('/lander-2', '/products', '/the-original-mr-fuzzy', '/cart')
+    ) AS pageview_level
+    GROUP BY website_session_id
+) AS session_aggregates;
+
+
+
+
