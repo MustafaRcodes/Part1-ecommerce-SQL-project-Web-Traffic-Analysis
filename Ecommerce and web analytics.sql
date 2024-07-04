@@ -714,6 +714,173 @@ FROM (
     GROUP BY website_session_id
 ) AS session_aggregates;
 
+-- There is another way of writing above code by creating temprarory table 
 
+-- Would like to undertand where we lose our gsearch visitors between the new/ lander-1 page and 
+-- placing an order. building full conversion funnel, analyzing how many customers make it to each step.
+-- starting with /lander-1 and building the funnelall the way to our thank you page. Using data since August 5th.
 
+-- Step 1: select all pageviews for relevant sessions
+-- Step 2: identify each pageview as the specific funnel step
+-- Step 3: create the session-level conversion funnel view
+-- Step 4: aggregate the data to assess funel performance
 
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   -- website_pageviews.created_at AS pageview_created_at,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS products_page,
+   CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page,
+   CASE WHEN pageview_url = '/shipping' THEN 1 ELSE 0 END AS shipping_page,
+   CASE WHEN pageview_url = '/billing' THEN 1 ELSE 0 END AS billing_page,
+   CASE WHEN pageview_url = '/thank-you-for-your-order' THEN 1 ELSE 0 END AS thankyou_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.utm_source = 'gsearch'
+	AND website_sessions.utm_campaign = 'nonbrand'
+    AND website_sessions.created_at >'2012-08-05'
+    AND website_sessions.created_at <'2012-09-05'
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at;
+    
+  SELECT 
+     website_session_id,
+     MAX(products_page) AS products_made_it,
+     MAX(mrfuzzy_page) AS mrfuzzy_page_made_it,
+     MAX(cart_page) AS cart_page_made_it,
+     MAX(shipping_page) AS shipping_page_made_it,
+     MAX(billing_page) AS billing_page_made_it,
+     MAX(thankyou_page) AS thankyou_page_made_it
+ FROM( 
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   -- website_pageviews.created_at AS pageview_created_at,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS products_page,
+   CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page,
+   CASE WHEN pageview_url = '/shipping' THEN 1 ELSE 0 END AS shipping_page,
+   CASE WHEN pageview_url = '/billing' THEN 1 ELSE 0 END AS billing_page,
+   CASE WHEN pageview_url = '/thank-you-for-your-order' THEN 1 ELSE 0 END AS thankyou_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.utm_source = 'gsearch'
+	AND website_sessions.utm_campaign = 'nonbrand'
+    AND website_sessions.created_at >'2012-08-05'
+    AND website_sessions.created_at <'2012-09-05'
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at
+    ) AS pageview_level
+GROUP BY website_session_id;
+
+CREATE TEMPORARY TABLE session_level_made_it_flags2
+SELECT 
+     website_session_id,
+     MAX(products_page) AS products_made_it,
+     MAX(mrfuzzy_page) AS mrfuzzy_page_made_it,
+     MAX(cart_page) AS cart_page_made_it,
+     MAX(shipping_page) AS shipping_page_made_it,
+     MAX(billing_page) AS billing_page_made_it,
+     MAX(thankyou_page) AS thankyou_page_made_it
+ FROM( 
+SELECT
+   website_sessions.website_session_id,
+   website_pageviews.pageview_url,
+   -- website_pageviews.created_at AS pageview_created_at,
+   CASE WHEN pageview_url = '/products' THEN 1 ELSE 0  END AS products_page,
+   CASE WHEN pageview_url = '/the-original-mr-fuzzy' THEN 1 ELSE 0 END AS mrfuzzy_page,
+   CASE WHEN pageview_url = '/cart' THEN 1 ELSE 0 END AS cart_page,
+   CASE WHEN pageview_url = '/shipping' THEN 1 ELSE 0 END AS shipping_page,
+   CASE WHEN pageview_url = '/billing' THEN 1 ELSE 0 END AS billing_page,
+   CASE WHEN pageview_url = '/thank-you-for-your-order' THEN 1 ELSE 0 END AS thankyou_page
+FROM website_sessions
+   LEFT JOIN website_pageviews
+     ON website_sessions.website_session_id = website_pageviews.website_session_id
+WHERE website_sessions.utm_source = 'gsearch'
+	AND website_sessions.utm_campaign = 'nonbrand'
+    AND website_sessions.created_at >'2012-08-05'
+    AND website_sessions.created_at <'2012-09-05'
+ORDER BY 
+    website_sessions.website_session_id,
+    website_pageviews.created_at
+    ) AS pageview_level
+GROUP BY website_session_id;
+
+SELECT * FROM session_level_made_it_flags2;
+
+-- Final count of each stage of session where customer clicked on website
+SELECT 
+   COUNT(DISTINCT website_session_id) AS sessions,
+   COUNT(DISTINCT CASE WHEN products_made_it = 1 THEN website_session_id ELSE NULL END) AS to_products,
+   COUNT(DISTINCT CASE WHEN mrfuzzy_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_mrfuzzy,
+   COUNT(DISTINCT CASE WHEN cart_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_cart,
+   COUNT(DISTINCT CASE WHEN shipping_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_shipping,
+   COUNT(DISTINCT CASE WHEN billing_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_billing,
+   COUNT(DISTINCT CASE WHEN thankyou_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_thankyou
+FROM session_level_made_it_flags2;
+
+-- On the basis of count calculating click rates in percentage for each step of shopping from checking product to billing page to thank you page
+
+SELECT 
+   COUNT(DISTINCT CASE WHEN products_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT website_session_id) AS lander_click_rate,
+   COUNT(DISTINCT CASE WHEN mrfuzzy_page_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN products_made_it = 1 THEN website_session_id ELSE NULL END) AS to_product_click_rate,
+   COUNT(DISTINCT CASE WHEN cart_page_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN mrfuzzy_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_mrfuzzy_click_rate,
+   COUNT(DISTINCT CASE WHEN shipping_page_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN cart_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_cart_click_rate,
+   COUNT(DISTINCT CASE WHEN billing_page_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN shipping_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_shipping_click_rate,
+   COUNT(DISTINCT CASE WHEN thankyou_page_made_it = 1 THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN billing_page_made_it = 1 THEN website_session_id ELSE NULL END) AS to_billing_click_rate
+FROM session_level_made_it_flags2;
+
+-- Looks like we should focus on the lander, Mr.Fuzzy page and the billing page, which have the lowest click.
+-- For billing page we need to make customer more comfortable entering their credit card info.
+-- We need to check new page soon. 
+
+-- We need to check if we have any imporvement on billing2 page after the implimention of changes 
+-- Will compare it with old billing page result
+
+SELECT 
+   MIN(website_pageview_id) AS first_pv_id
+FROM website_pageviews
+WHERE pageview_url = '/billing-2';
+
+SELECT 
+   website_pageviews.website_session_id,
+   website_pageviews.pageview_url AS billing_version_seen,
+   orders.order_id
+FROM 
+   website_pageviews
+   LEFT JOIN orders
+        ON orders.website_session_id = website_pageviews.website_session_id
+WHERE website_pageviews.website_pageview_id >= 53550
+    AND website_pageviews.created_at < '2012-11-10'
+    AND website_pageviews.pageview_url IN ('/billing','/billing-2');
+    
+    -- Final analysis output 
+    
+    SELECT
+	billing_version_seen,
+    COUNT(DISTINCT website_session_id) AS session,
+    COUNT(DISTINCT order_id) AS orders,
+    COUNT(DISTINCT order_id)/COUNT(DISTINCT website_session_id) AS billing_to_order_rate
+    FROM(
+    SELECT 
+   website_pageviews.website_session_id,
+   website_pageviews.pageview_url AS billing_version_seen,
+   orders.order_id
+FROM 
+   website_pageviews
+   LEFT JOIN orders
+        ON orders.website_session_id = website_pageviews.website_session_id
+WHERE website_pageviews.website_pageview_id >= 53550
+    AND website_pageviews.created_at < '2012-11-10'
+    AND website_pageviews.pageview_url IN ('/billing','/billing-2')
+) AS billing_sessions_w_orders
+GROUP BY 
+    billing_version_seen;
+    
+-- Looks like the new version of the billing page has done much better job converting customers
+-- will keep goig with this strategy and roll out to all of our customer right away. Great potential fro revenue increase. 
