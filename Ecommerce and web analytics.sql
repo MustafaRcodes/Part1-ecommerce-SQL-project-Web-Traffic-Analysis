@@ -971,5 +971,182 @@ GROUP BY 1,2;
 pulling session to order conversion rates by month.
 */
 
+SELECT 
+  YEAR(website_sessions.created_at) AS yr,
+  MONTH(website_sessions.created_at) AS mo,
+  COUNT(DISTINCT website_sessions.website_session_id) AS sessions,
+  COUNT(DISTINCT orders.order_id) AS orders,
+  COUNT(DISTINCT orders.order_id)/COUNT(DISTINCT website_sessions.website_session_id) AS conv_rate
+FROM website_sessions
+  LEFT JOIN orders
+    ON orders.website_session_id = website_sessions.website_session_id
+WHERE website_sessions.created_at < '2012-11-27'
+    AND website_sessions.utm_source = 'gsearch'
+GROUP BY 1,2; 
 
+/* 
+6. For the gsearch lander test, estimating the revenue test earned us.
+-- looking at the increase in CVR from the test (Jun 19 - Jul 28) and use 
+nonbrand sessions and revenue since then to calculate incremental value)
+*/
+
+-- CHANNEL PORTFOLIO OPTIMIZATION
+
+SELECT 
+  utm_content,
+  COUNT(DISTINCT website_sessions.website_session_id) AS sessions,
+  COUNT(DISTINCT orders.order_id) AS orders,
+  COUNT(DISTINCT orders.order_id)/COUNT(DISTINCT website_sessions.website_session_id) AS session_to_order_conversion_rate
+FROM 
+  website_sessions
+     LEFT JOIN orders
+        ON orders.website_session_id = website_sessions.website_session_id
+WHERE 
+   website_sessions.created_at BETWEEN '2014-01-01' AND '2014-02-01'
+GROUP BY 1
+ORDER BY sessions DESC;
+
+-- From above we can see highest conversion rate is from g_ad_2 and lowest is from social_ad_1.
+
+
+-- We launced a second paid seach channel, bsearch around august 22nd and Pulling weekly trended session volume from around august 22nd and compare the gsearch nonbrand 
+-- so can get a sence for how important this will be for a business.
+
+SELECT
+	-- YEAR(created_at) AS year,
+    -- WEEK(created_at) AS week,
+	MIN(DATE(created_at)) AS week_start_date,
+    COUNT(DISTINCT website_session_id) AS  total_sessions,
+    COUNT(DISTINCT CASE WHEN utm_source = 'gsearch' THEN website_session_id ELSE NULL END) AS gsearch_session,
+    COUNT(DISTINCT CASE WHEN utm_source = 'bsearch' THEN website_session_id ELSE NULL END) AS bsearch_session
+FROM website_sessions
+WHERE created_at > '2012-08-22'
+     AND created_at < '2012-11-29'
+	 AND utm_campaign = 'nonbrand'
+GROUP BY
+     YEAR(created_at),
+     WEEK(created_at);
+     
+-- It looks like bsearch tends to get roughly a third the traffic of gsearch. This is big enough that
+-- we should really get to know the channel better.
+
+
+-- Would like to learn about the bsearch nonbrand campaign. 
+-- will pull the percentage of traffic coming on mobile, and compare that to gsearch
+-- Aggregating data since Aug 22nd.
+
+SELECT
+   utm_source,
+   COUNT(DISTINCT website_sessions.website_session_id) AS sessions,
+   COUNT(DISTINCT CASE WHEN device_type = 'mobile' THEN website_sessions.website_session_id ELSE NULL END) AS mobile_sessions,
+   COUNT(DISTINCT CASE WHEN device_type = 'mobile' THEN website_sessions.website_session_id ELSE NULL END)/COUNT(DISTINCT website_sessions.website_session_id) AS pct_mobile
+FROM website_sessions
+WHERE created_at > '2012-08-22'
+     AND created_at < '2012-11-30'
+	 AND utm_campaign = 'nonbrand'
+GROUP BY
+     utm_source;
+     
+-- interesting fact is desktop to mobile splits are very interesting. These channels are quite different 
+-- from a device standpoint.
+
+-- We need to pull nonbrand conversion rates from session to order for gsearch and bsearch and slice the 
+-- data by device type. Need to analyze data from August 22nd to september 18th
+
+SELECT 
+   website_sessions.device_type,
+   website_sessions.utm_source,
+   COUNT(DISTINCT website_sessions.website_session_id) AS sessions,
+   COUNT(DISTINCT orders.order_id) AS orders,
+   COUNT(DISTINCT orders.order_id)/COUNT(DISTINCT website_sessions.website_session_id) AS Conv_rate
+FROM website_sessions
+   LEFT JOIN orders
+      ON orders.website_session_id = website_sessions.website_session_id
+WHERE website_sessions.created_at > '2012-08-22'
+    AND website_sessions.created_at < '2012-09-19'
+    AND website_sessions.utm_campaign = 'nonbrand'
+GROUP BY 
+    website_sessions.device_type,
+    website_sessions.utm_source;
+
+-- gsearch has better conversion rate using desktop and mobile as compare to bseach using desktop and mobile device.
+-- Channels don't perform identically, so we should differenciate our bids in order to optimize our 
+-- overall paid marketing budget. 
+-- we should bid down bsearch based on its under-performance.
+
+
+-- Based on our last analysis, we bid down bsearch nonbrand on December 2nd.
+-- We can pull weekly session volume for gsearch and bsearch nonbrand, broken down 	by device, since November 4th 
+-- We can include a comparison metric to show bsearch as a percentage of gsearch for each device.
+
+SELECT 
+MIN(DATE(created_at)) AS week_start_date,
+COUNT(DISTINCT CASE WHEN utm_source = 'gsearch' AND device_type = 'desktop' THEN website_session_id ELSE NULL END) AS gsearch_desktop_sessions,
+COUNT(DISTINCT CASE WHEN utm_source = 'bsearch' AND device_type = 'desktop' THEN website_session_id ELSE NULL END) AS bsearch_desktop_sessions,
+COUNT(DISTINCT CASE WHEN utm_source = 'bsearch' AND device_type = 'desktop' THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN utm_source = 'gsearch' AND device_type = 'desktop' THEN website_session_id ELSE NULL END) AS bsearch_desktop_sessions_of_gsearch_desktop_sessions,
+COUNT(DISTINCT CASE WHEN utm_source = 'gsearch' AND device_type = 'mobile' THEN website_session_id ELSE NULL END) AS gsearch_mobile_sessions,
+COUNT(DISTINCT CASE WHEN utm_source = 'bsearch' AND device_type = 'mobile' THEN website_session_id ELSE NULL END) AS bsearch_mobile_sessions,
+COUNT(DISTINCT CASE WHEN utm_source = 'bsearch' AND device_type = 'mobile' THEN website_session_id ELSE NULL END)/COUNT(DISTINCT CASE WHEN utm_source = 'gsearch' AND device_type = 'mobile' THEN website_session_id ELSE NULL END) AS bsearch_mobile_sessions_of_gsearch_mobile_sessions
+FROM website_sessions
+WHERE created_at > '2012-11-04'
+     AND created_at < '2012-12-22'
+	 AND utm_campaign = 'nonbrand'
+GROUP BY
+     YEAR(created_at),
+     WEEK(created_at);
+     
+-- last 3 rows show bsearch traffic dropped off a bit after the bid down.
+-- Looks like gsearch was down too after black friday and cyver monday however bsearch dropped even more.
+
+-- ANALYZING DIRECT TRAFFIC ( no customer acquisition cost and high margin)
+
+SELECT 
+  CASE 
+     WHEN http_referer IS NULL THEN 'direct_type_in'
+     WHEN http_referer = 'https://www.gsearch.com' AND utm_source IS NULL THEN 'gsearch_organic'
+     WHEN http_referer = 'https://www.bsearch.com' AND utm_source IS NULL THEN 'bsearch_organic'
+     ELSE'other'
+     END AS status,
+     COUNT(DISTINCT website_session_id) AS sessions
+FROM website_sessions
+WHERE website_session_id BETWEEN 100000 AND 115000
+     -- AND utm_source IS NULL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+-- ANALYZING DIRECT TRAFFIC
+-- Need to pull organic search, direct type in and paid brand search session by month and those sessions
+-- as a % of paid search nonbrand.
+
+SELECT
+	YEAR(created_at) AS yr,
+    MONTH(created_at) AS mo,
+    COUNT(DISTINCT CASE WHEN channel_group = 'paid_nonbrand' THEN website_session_id ELSE NULL END) AS nonbrand,
+    COUNT(DISTINCT CASE WHEN channel_group = 'paid_brand' THEN website_session_id ELSE NULL END) AS brand,
+    COUNT(DISTINCT CASE WHEN channel_group = 'paid_brand' THEN website_session_id ELSE NULL END)
+	    /COUNT(DISTINCT CASE WHEN channel_group = 'paid_nonbrand' THEN website_session_id ELSE NULL END) AS brand_pct_of_nonbrand,
+    COUNT(DISTINCT CASE WHEN channel_group = 'direct_type_in' THEN website_session_id ELSE NULL END) AS direct,
+    COUNT(DISTINCT CASE WHEN channel_group = 'direct_type_in' THEN website_session_id ELSE NULL END)
+        /COUNT(DISTINCT CASE WHEN channel_group = 'paid_nonbrand' THEN website_session_id ELSE NULL END) AS direct_pct_of_nonbrand,
+    COUNT(DISTINCT CASE WHEN channel_group = 'organic_search' THEN website_session_id ELSE NULL END) AS organic,
+    COUNT(DISTINCT CASE WHEN channel_group = 'organic_search' THEN website_session_id ELSE NULL END)
+        /COUNT(DISTINCT CASE WHEN channel_group = 'paid_nonbrand' THEN website_session_id ELSE NULL END) AS organic_pct_of_nonbrand
+FROM(
+SELECT
+  website_session_id,
+  created_at,
+  CASE
+     WHEN utm_source IS NULL AND http_referer IN ('https://www.gsearch.com','https://www.bsearch.com') THEN 'organic_search'
+     WHEN utm_campaign = 'nonbrand' THEN 'paid_nonbrand'
+     WHEN utm_campaign = 'brand' THEN 'paid_brand'
+     WHEN utm_source IS NULL AND http_referer IS NULL THEN 'direct_type_in'
+   END AS channel_group
+FROM website_sessions
+WHERE created_at < '2012-12-23'
+) AS sessions_w_channel_group
+GROUP BY 
+    YEAR(created_at),
+    MONTH(created_at);
     
+-- Looks like not only are our brand , direct an organic volumes growing but are growing as a percentage 
+-- of our paid traffic volume.
